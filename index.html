@@ -1,347 +1,359 @@
-
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>نظام تقييم الغسيل</title>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#111827;font-family:'Segoe UI',Tahoma,sans-serif}
-    @keyframes spin{to{transform:rotate(360deg)}}
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>نظام تقييم الغسيل</title>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111827;font-family:'Segoe UI',Tahoma,sans-serif}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeIn .25s ease}
+input,textarea,select{outline:none}
+</style>
 </head>
 <body>
 <div id="root"></div>
 <script type="text/babel">
 const{useState,useEffect}=React;
 const SCRIPT_URL="https://script.google.com/macros/s/AKfycbxzWiHW1pApyGBQtlStifAuIDeBflA_ruERTdTUG7R7QxmI59oPwGGggojrnabA9a3h/exec";
-const WORKERS=[
+
+const DEFAULT_WORKERS=[
   {id:"w1",nameAr:"محمد ياسين",cars:["نص","وانيت","لكسز أسود","لكسز رمادي"]},
   {id:"w2",nameAr:"انصار",cars:["ماليبو","باترول","إنفينيتي"]},
   {id:"w3",nameAr:"نور جمال",cars:["فولكس واقن","ميتسوبيشي","اكسبدشن","باجيرو"]},
   {id:"w4",nameAr:"ابو سيد",cars:["مرسيدس قديمة","مرسيدس جديدة","اكسبدشن أسود"]},
 ];
+const DEFAULT_ACCOUNTS=[
+  {username:"admin",password:"admin123",role:"admin",displayName:"المدير"},
+  {username:"evaluator1",password:"1234",role:"evaluator",displayName:"المقيم ١"},
+];
+
 const SECTIONS=[
   {id:"exterior",label:"النظافة الخارجية",icon:"🚗",color:"#2563EB",criteria:["جسم السيارة نظيف — لا وساخة أو آثار صابون","الزجاج نظيف — لا خطوط أو بصمات","الإطارات والجنوط نظيفة","لا مناطق فائتة في الأجزاء السفلية","السيارة جُففت صح — لا بقع ماء"]},
   {id:"interior",label:"النظافة الداخلية",icon:"🪑",color:"#16A34A",criteria:["كل الأوساخ والمخلفات شُيلت من الداخل","الكراسي والسجاد نُظّفوا بالفاكيوم","الديكورات والتشطيبات مُمسحة ومُلمّعة","لوحة القيادة والأبواب والكونسول نظيفة","التعطير اتطبق صح — مو زيادة"]},
   {id:"tools",label:"حالة الأدوات والتخزين",icon:"🧰",color:"#D97706",criteria:["كل الأدوات موجودة — لا شيء ناقص","الإسفنج نظيف ومغسول وبدون روائح","الفوط نظيفة وجافة وبدون روائح","لا أدوات مبللة أو متروكة على الأرض","الأدوات مخزنة صح في مكانها المحدد","لا علامات سوء استخدام أو تلف في أي أداة"]},
   {id:"discipline",label:"الانضباط والتوقيت",icon:"⏰",color:"#DC2626",criteria:["الشغل بدأ بوقته — بعد الفجر وقبل الساعة ٨","كل السيارات المسؤول عنها اتغسلت — لا شيء فات","الصور قبل وبعد اتبعثت على الواتساب","تم إبلاغ أصحاب السيارات قبل غسيل الداخلي (الاثنين)","العامل يتبع التعليمات بدون تذكير"]},
 ];
+
 const SL={1:"ضعيف جداً",2:"ضعيف",3:"مقبول",4:"جيد",5:"ممتاز"};
 const SC={1:"#DC2626",2:"#EA580C",3:"#CA8A04",4:"#2563EB",5:"#16A34A"};
-const emptyScores=()=>{const s={};SECTIONS.forEach(sec=>{s[sec.id]={};sec.criteria.forEach((_,i)=>{s[sec.id][i]=0;});});return s;};
-const calcSec=(scores,secId)=>SECTIONS.find(s=>s.id===secId).criteria.reduce((sum,_,i)=>sum+(scores[secId]?.[i]||0),0);
-const calcTotal=(scores)=>SECTIONS.reduce((sum,sec)=>sum+calcSec(scores,sec.id),0);
-const maxTotal=()=>SECTIONS.reduce((sum,sec)=>sum+sec.criteria.length*5,0);
-const pct=(scores)=>Math.round((calcTotal(scores)/maxTotal())*100);
-const sPct=(scores,secId)=>{const sec=SECTIONS.find(s=>s.id===secId);return Math.round((calcSec(scores,secId)/(sec.criteria.length*5))*100);};
+
+const calcSec=(sc,id)=>SECTIONS.find(s=>s.id===id).criteria.reduce((s,_,i)=>s+(sc[id]?.[i]||0),0);
+const pctSecs=(sc,ids)=>{const mx=ids.reduce((s,id)=>s+SECTIONS.find(x=>x.id===id).criteria.length*5,0);return mx?Math.round(ids.reduce((s,id)=>s+calcSec(sc,id),0)/mx*100):0;};
+const sPct=(sc,id)=>{const sec=SECTIONS.find(s=>s.id===id);const mx=sec.criteria.length*5;return mx?Math.round(calcSec(sc,id)/mx*100):0;};
 const gradeOf=(p)=>p>=90?{label:"ممتاز",color:"#16A34A",bg:"#DCFCE7"}:p>=75?{label:"جيد",color:"#2563EB",bg:"#DBEAFE"}:p>=60?{label:"مقبول",color:"#CA8A04",bg:"#FEF9C3"}:p>=45?{label:"ضعيف",color:"#EA580C",bg:"#FFEDD5"}:{label:"ضعيف جداً",color:"#DC2626",bg:"#FEE2E2"};
-const post=async(body)=>{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify(body)});return r.json();};
-const get=async()=>{const r=await fetch(SCRIPT_URL+"?t="+Date.now());return r.json();};
+const emptyScores=()=>{const s={};SECTIONS.forEach(sec=>{s[sec.id]={};sec.criteria.forEach((_,i)=>{s[sec.id][i]=0;});});return s;};
+
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch{return d;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
+
+const post=async(b)=>{const r=await fetch(SCRIPT_URL,{method:"POST",body:JSON.stringify(b)});return r.json();};
+const getEvals=async()=>{const r=await fetch(SCRIPT_URL+"?t="+Date.now());return r.json();};
+
 const St={
-  root:{minHeight:"100vh",background:"#111827",color:"#F9FAFB",direction:"rtl",maxWidth:500,margin:"0 auto",paddingBottom:40},
-  header:{background:"linear-gradient(135deg,#1D4ED8,#1E40AF)",padding:"32px 20px 24px",textAlign:"center"},
+  root:{minHeight:"100vh",background:"#111827",color:"#F9FAFB",direction:"rtl",maxWidth:520,margin:"0 auto",paddingBottom:40},
+  hdr:{background:"linear-gradient(135deg,#1D4ED8,#1E40AF)",padding:"26px 20px 18px",textAlign:"center"},
   card:{background:"#1F2937",borderRadius:12,padding:14,border:"1px solid #374151"},
-  pill:{borderRadius:20,padding:"4px 12px",fontWeight:700,fontSize:14,display:"inline-block"},
+  pill:{borderRadius:20,padding:"4px 12px",fontWeight:700,fontSize:13,display:"inline-block"},
   tag:{background:"#374151",color:"#D1D5DB",fontSize:11,padding:"3px 8px",borderRadius:10},
-  navBtn:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"14px 8px",borderRadius:12,border:"none",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",position:"relative"},
-  dot2:{position:"absolute",top:8,left:8,background:"#EF4444",color:"#fff",fontSize:11,fontWeight:700,padding:"1px 6px",borderRadius:10},
-  bar:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",background:"#1F2937",borderBottom:"1px solid #374151"},
-  back:{background:"none",border:"none",color:"#60A5FA",fontSize:14,cursor:"pointer",fontWeight:600},
-  lbl:{display:"block",color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:8},
-  chip:{background:"#374151",border:"2px solid #4B5563",borderRadius:10,padding:"8px 12px",cursor:"pointer",textAlign:"right",color:"#D1D5DB",minWidth:110},
+  nb:{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,padding:"11px 6px",borderRadius:12,border:"none",color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",position:"relative"},
+  bar:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"#1F2937",borderBottom:"1px solid #374151"},
+  back:{background:"none",border:"none",color:"#60A5FA",fontSize:13,cursor:"pointer",fontWeight:600},
+  lbl:{display:"block",color:"#9CA3AF",fontSize:12,fontWeight:600,marginBottom:7},
+  chip:{background:"#374151",border:"2px solid #4B5563",borderRadius:10,padding:"7px 10px",cursor:"pointer",textAlign:"right",color:"#D1D5DB",minWidth:100},
   chipA:{background:"#1D4ED8",border:"2px solid #3B82F6",color:"#fff"},
-  typeBtn:{flex:1,padding:"10px",background:"#374151",border:"2px solid #4B5563",borderRadius:10,color:"#D1D5DB",fontSize:13,cursor:"pointer",fontWeight:600},
-  typeBtnA:{background:"#7C3AED",borderColor:"#8B5CF6",color:"#fff"},
-  secHdr:{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:"#1F2937",borderRadius:12,borderRight:"4px solid"},
-  critRow:{background:"#1F2937",borderRadius:10,padding:"12px 14px"},
-  scoreBtn:{width:40,height:40,borderRadius:10,fontWeight:700,fontSize:15,cursor:"pointer",transition:"all .15s"},
+  btn:{padding:"12px",borderRadius:11,border:"none",color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"},
+  inp:{width:"100%",background:"#374151",border:"1px solid #4B5563",borderRadius:8,color:"#F9FAFB",fontSize:13,padding:"10px 12px",boxSizing:"border-box"},
   ta:{width:"100%",background:"#374151",border:"1px solid #4B5563",borderRadius:8,color:"#F9FAFB",fontSize:13,padding:10,resize:"none",boxSizing:"border-box"},
-  btn:{padding:"14px",borderRadius:12,border:"none",color:"#fff",fontWeight:700,fontSize:14,cursor:"pointer"},
-  empty:{textAlign:"center",color:"#6B7280",padding:"48px 20px",fontSize:15,display:"flex",flexDirection:"column",alignItems:"center",gap:12},
-  spinner:{width:32,height:32,border:"3px solid #374151",borderTop:"3px solid #3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite"},
+  empty:{textAlign:"center",color:"#6B7280",padding:"48px 20px",fontSize:14,display:"flex",flexDirection:"column",alignItems:"center",gap:12},
+  spin:{width:28,height:28,border:"3px solid #374151",borderTop:"3px solid #3B82F6",borderRadius:"50%",animation:"spin 1s linear infinite"},
 };
 
+// ── Login ─────────────────────────────────────────────────────────────────────
+function Login({onLogin}){
+  const[u,setU]=useState("");const[p,setP]=useState("");const[err,setErr]=useState("");
+  const go=()=>{const acc=lsGet("cw_accounts",DEFAULT_ACCOUNTS).find(a=>a.username===u.trim()&&a.password===p);acc?onLogin(acc):setErr("اسم المستخدم أو كلمة المرور غلط");};
+  return(<div style={St.root}>
+    <div style={St.hdr}><div style={{fontSize:48,marginBottom:4}}>🚗</div><h1 style={{margin:0,fontSize:20,fontWeight:700,color:"#fff"}}>نظام تقييم الغسيل</h1></div>
+    <div style={{padding:"32px 20px"}}>
+      <div style={{...St.card,padding:22}}>
+        <h2 style={{margin:"0 0 18px",fontSize:17,fontWeight:700,textAlign:"center"}}>تسجيل الدخول</h2>
+        <label style={St.lbl}>اسم المستخدم</label>
+        <input style={{...St.inp,marginBottom:12}} value={u} onChange={e=>setU(e.target.value)} placeholder="Username" onKeyDown={e=>e.key==="Enter"&&go()}/>
+        <label style={St.lbl}>كلمة المرور</label>
+        <input style={{...St.inp,marginBottom:14}} type="password" value={p} onChange={e=>setP(e.target.value)} placeholder="Password" onKeyDown={e=>e.key==="Enter"&&go()}/>
+        {err&&<div style={{color:"#DC2626",fontSize:12,marginBottom:10,textAlign:"center"}}>⚠ {err}</div>}
+        <button style={{...St.btn,background:"#1D4ED8",width:"100%"}} onClick={go}>دخول</button>
+      </div>
+    </div>
+  </div>);
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 function App(){
+  const[user,setUser]=useState(null);
   const[page,setPage]=useState("home");
   const[evals,setEvals]=useState([]);
   const[loading,setLoading]=useState(true);
-  const[syncing,setSyncing]=useState(false);
-  const[syncError,setSyncError]=useState("");
-  const[worker,setWorker]=useState("w1");
+  const[workers,setWorkers]=useState(lsGet("cw_workers",DEFAULT_WORKERS));
+  // form state
+  const[worker,setWorker]=useState("");
   const[evalType,setEvalType]=useState("weekly");
+  const[selSecs,setSelSecs]=useState(SECTIONS.map(s=>s.id));
   const[scores,setScores]=useState(emptyScores());
   const[notes,setNotes]=useState("");
+  const[step,setStep]=useState(0);
+  const[syncing,setSyncing]=useState(false);
+  const[syncErr,setSyncErr]=useState("");
   const[saved,setSaved]=useState(false);
   const[lastEntry,setLastEntry]=useState(null);
-  const[activeSection,setActiveSection]=useState(0);
+  const[sTab,setSTab]=useState("workers");
+  const[sEditId,setSEditId]=useState(null);
+  const[sEditName,setSEditName]=useState("");
+  const[sNewCar,setSNewCar]=useState("");
+  const[sCarEditId,setSCarEditId]=useState(null);
+  const[sAccounts,setSAccounts]=useState(lsGet("cw_accounts",DEFAULT_ACCOUNTS));
+  const[sNewAcc,setSNewAcc]=useState({username:"",password:"",displayName:"",role:"evaluator"});
+  const[sNewWName,setSNewWName]=useState("");
 
-  useEffect(()=>{
-    get().then(res=>{
-      if(res.success){
-        setEvals((res.data||[]).map(row=>({
-          id:row.ID,date:row.Date,workerName:row.Worker,evalType:row.Type,
-          percentage:Number(row["Total%"])||0,
-          exteriorPct:Number(row["Exterior%"])||0,
-          interiorPct:Number(row["Interior%"])||0,
-          toolsPct:Number(row["Tools%"])||0,
-          disciplinePct:Number(row["Discipline%"])||0,
-          grade:row.Grade,notes:row.Notes,
-        })).reverse());
-      }
-      setLoading(false);
-    }).catch(()=>setLoading(false));
-  },[]);
+  useEffect(()=>{if(!user)return;getEvals().then(r=>{if(r.success)setEvals((r.data||[]).map(row=>({id:row.ID,date:row.Date,workerName:row.Worker,evalType:row.Type,evaluator:row.Evaluator||"",percentage:Number(row["Total%"])||0,exteriorPct:row["Exterior%"]!==""?Number(row["Exterior%"]):null,interiorPct:row["Interior%"]!==""?Number(row["Interior%"]):null,toolsPct:row["Tools%"]!==""?Number(row["Tools%"]):null,disciplinePct:row["Discipline%"]!==""?Number(row["Discipline%"]):null,grade:row.Grade,notes:row.Notes,sections:row.Sections||""})).reverse());setLoading(false);}).catch(()=>setLoading(false));},[user]);
+  useEffect(()=>{lsSet("cw_workers",workers);},[workers]);
 
-  const resetForm=()=>{setScores(emptyScores());setNotes("");setSaved(false);setActiveSection(0);setWorker("w1");setSyncError("");};
+  const resetForm=()=>{setScores(emptyScores());setNotes("");setSaved(false);setStep(0);setWorker(workers[0]?.id||"");setSyncErr("");setSelSecs(SECTIONS.map(s=>s.id));};
+  const activeSecs=SECTIONS.filter(s=>selSecs.includes(s.id));
+  const curSec=activeSecs[step-1];
+  const totalFilled=activeSecs.every(sec=>sec.criteria.every((_,i)=>(scores[sec.id]?.[i]||0)>0));
+  const wo=workers.find(w=>w.id===worker)||workers[0];
 
   const handleSave=async()=>{
-    setSyncing(true);setSyncError("");
-    const wo=WORKERS.find(w=>w.id===worker);
-    const p=pct(scores);const g=gradeOf(p);
-    const entry={
-      id:Date.now(),date:new Date().toLocaleDateString("ar-SA"),
-      workerName:wo.nameAr,evalType,
-      exteriorPct:sPct(scores,"exterior"),interiorPct:sPct(scores,"interior"),
-      toolsPct:sPct(scores,"tools"),disciplinePct:sPct(scores,"discipline"),
-      percentage:p,grade:g.label,notes,scores,
-    };
-    try{
-      const res=await post(entry);
-      if(res.success){setEvals(prev=>[entry,...prev]);setLastEntry(entry);setSaved(true);}
-      else setSyncError("حصل خطأ في الحفظ، حاول مرة ثانية");
-    }catch{setSyncError("تأكد من اتصال الإنترنت وحاول مرة ثانية");}
+    setSyncing(true);setSyncErr("");
+    const p=pctSecs(scores,activeSecs.map(s=>s.id));const g=gradeOf(p);
+    const entry={id:Date.now(),date:new Date().toLocaleDateString("ar-SA"),workerName:wo.nameAr,evalType,evaluator:user.displayName,exteriorPct:selSecs.includes("exterior")?sPct(scores,"exterior"):null,interiorPct:selSecs.includes("interior")?sPct(scores,"interior"):null,toolsPct:selSecs.includes("tools")?sPct(scores,"tools"):null,disciplinePct:selSecs.includes("discipline")?sPct(scores,"discipline"):null,percentage:p,grade:g.label,notes,scores,sections:activeSecs.map(s=>s.id).join(",")};
+    try{const r=await post(entry);if(r.success){setEvals(prev=>[entry,...prev]);setLastEntry(entry);setSaved(true);}else setSyncErr("خطأ في الحفظ");}catch{setSyncErr("تأكد من الإنترنت");}
     setSyncing(false);
   };
 
-  const setScore=(secId,idx,val)=>setScores(prev=>({...prev,[secId]:{...prev[secId],[idx]:val}}));
-  const wo=WORKERS.find(w=>w.id===worker);
-  const totalFilled=SECTIONS.every(sec=>sec.criteria.every((_,i)=>(scores[sec.id]?.[i]||0)>0));
-  const sec=SECTIONS[activeSection];
+  if(!user) return <Login onLogin={u=>{setUser(u);setWorker(lsGet("cw_workers",DEFAULT_WORKERS)[0]?.id||"");}}/>;
 
-  if(page==="home") return(
-    <div style={St.root}>
-      <div style={St.header}>
-        <div style={{fontSize:52,marginBottom:6}}>🚗</div>
-        <h1 style={{margin:0,fontSize:22,fontWeight:700,color:"#fff"}}>نظام تقييم الغسيل</h1>
-        <p style={{margin:"4px 0 0",fontSize:13,color:"#93C5FD"}}>Car Wash Evaluation System</p>
-      </div>
-      {loading?(<div style={St.empty}><div style={St.spinner}/>جاري تحميل البيانات...</div>):(
-        <div style={{padding:"16px 12px 0",display:"flex",flexDirection:"column",gap:10}}>
-          {WORKERS.map(w=>{
-            const we=evals.filter(e=>e.workerName===w.nameAr);
-            const last=we[0];const g=last?gradeOf(last.percentage):null;
-            const avg=we.length?Math.round(we.reduce((s,e)=>s+e.percentage,0)/we.length):null;
-            return(<div key={w.id} style={St.card}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div>
-                  <div style={{fontWeight:700,fontSize:15}}>{w.nameAr}</div>
-                  <div style={{color:"#9CA3AF",fontSize:12,marginTop:2}}>{w.cars.length} سيارات · {we.length} تقييم</div>
-                </div>
-                {g&&<div style={{...St.pill,background:g.bg,color:g.color,fontSize:18,padding:"6px 14px"}}>{last.percentage}%</div>}
-              </div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
-                {w.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}
-              </div>
-              {avg!==null&&(<div style={{display:"flex",justifyContent:"space-between",marginTop:10,fontSize:12,color:"#9CA3AF"}}>
-                <span>آخر تقييم: <b style={{color:"#E5E7EB"}}>{last.date}</b></span>
-                <span>المعدل: <b style={{color:gradeOf(avg).color}}>{avg}%</b></span>
-              </div>)}
-            </div>);
-          })}
-        </div>
-      )}
-      <div style={{display:"flex",gap:10,padding:"16px 12px"}}>
-        {[
-          {label:"📝 تقييم جديد",bg:"#1D4ED8",fn:()=>{resetForm();setPage("form");}},
-          {label:"📋 السجل",bg:"#15803D",fn:()=>setPage("history"),count:evals.length},
-          {label:"📊 التقارير",bg:"#7C3AED",fn:()=>setPage("report")},
-        ].map((b,i)=>(
-          <button key={i} style={{...St.navBtn,background:b.bg}} onClick={b.fn}>
-            <span style={{fontSize:22}}>{b.label.split(" ")[0]}</span>
-            <span style={{fontSize:12}}>{b.label.split(" ").slice(1).join(" ")}</span>
-            {b.count>0&&<span style={St.dot2}>{b.count}</span>}
-          </button>
-        ))}
-      </div>
-      <div style={{textAlign:"center",paddingBottom:8}}>
-        <span style={{fontSize:12,color:"#34D399"}}>✅ البيانات محفوظة في Google Sheets</span>
-      </div>
+  const Bar=({title,back})=>(
+    <div style={St.bar}>
+      {back?<button style={St.back} onClick={back}>← رجوع</button>:<div style={{width:50}}/>}
+      <span style={{fontWeight:700,fontSize:14}}>{title}</span>
+      <button style={{background:"none",border:"none",color:"#9CA3AF",fontSize:10,cursor:"pointer"}} onClick={()=>setUser(null)}>{user.displayName} ↩</button>
     </div>
   );
 
+  // ── HOME ──────────────────────────────────────────────────────────────────
+  if(page==="home") return(
+    <div style={St.root} className="fade">
+      <div style={St.hdr}><div style={{fontSize:46,marginBottom:4}}>🚗</div><h1 style={{margin:0,fontSize:20,fontWeight:700,color:"#fff"}}>نظام تقييم الغسيل</h1><p style={{margin:"3px 0 0",fontSize:11,color:"#93C5FD"}}>مرحباً {user.displayName}</p></div>
+      {loading?(<div style={St.empty}><div style={St.spin}/>جاري التحميل...</div>):(
+        <div style={{padding:"12px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
+          {workers.map(w=>{const we=evals.filter(e=>e.workerName===w.nameAr);const last=we[0];const g=last?gradeOf(last.percentage):null;const avg=we.length?Math.round(we.reduce((s,e)=>s+e.percentage,0)/we.length):null;return(<div key={w.id} style={St.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><div style={{fontWeight:700,fontSize:14}}>{w.nameAr}</div><div style={{color:"#9CA3AF",fontSize:11,marginTop:2}}>{w.cars.length} سيارات · {we.length} تقييم</div></div>{g&&<div style={{...St.pill,background:g.bg,color:g.color,fontSize:16,padding:"5px 12px"}}>{last.percentage}%</div>}</div><div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>{w.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}</div>{avg!==null&&(<div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:11,color:"#9CA3AF"}}><span>آخر تقييم: <b style={{color:"#E5E7EB"}}>{last.date}</b></span><span>المعدل: <b style={{color:gradeOf(avg).color}}>{avg}%</b></span></div>)}</div>);})}
+        </div>
+      )}
+      <div style={{display:"flex",gap:7,padding:"12px 12px 0"}}>
+        {[{i:"📝",s:"تقييم جديد",bg:"#1D4ED8",fn:()=>{resetForm();setPage("form");}},{i:"📋",s:"السجل",bg:"#15803D",fn:()=>setPage("history"),c:evals.length},{i:"📊",s:"التقارير",bg:"#7C3AED",fn:()=>setPage("report")},...(user.role==="admin"?[{i:"⚙️",s:"الإعدادات",bg:"#374151",fn:()=>setPage("settings")}]:[])].map((b,i)=>(
+          <button key={i} style={{...St.nb,background:b.bg}} onClick={b.fn}><span style={{fontSize:19}}>{b.i}</span><span>{b.s}</span>{b.c>0&&<span style={{position:"absolute",top:5,left:5,background:"#EF4444",color:"#fff",fontSize:10,padding:"0 5px",borderRadius:9}}>{b.c}</span>}</button>
+        ))}
+      </div>
+      <div style={{textAlign:"center",padding:"9px 0 0"}}><span style={{fontSize:11,color:"#34D399"}}>✅ البيانات محفوظة في Google Sheets</span></div>
+    </div>
+  );
+
+  // ── FORM ──────────────────────────────────────────────────────────────────
   if(page==="form"){
-    if(saved&&lastEntry){
-      const g=gradeOf(lastEntry.percentage);
-      return(<div style={St.root}>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"40px 20px",gap:12}}>
-          <div style={{fontSize:72}}>✅</div>
-          <h2 style={{margin:0,fontSize:20,fontWeight:700}}>تم الحفظ في Google Sheets</h2>
-          <div style={{color:"#9CA3AF"}}>{lastEntry.workerName}</div>
-          <div style={{fontSize:52,fontWeight:700,color:g.color}}>{lastEntry.percentage}%</div>
-          <div style={{...St.pill,background:g.bg,color:g.color,fontSize:16,padding:"8px 24px"}}>{g.label}</div>
-          <div style={{background:"#1F2937",borderRadius:12,padding:14,width:"100%",marginTop:4}}>
-            {[{icon:"🚗",label:"خارجي",val:lastEntry.exteriorPct,color:"#2563EB"},{icon:"🪑",label:"داخلي",val:lastEntry.interiorPct,color:"#16A34A"},{icon:"🧰",label:"أدوات",val:lastEntry.toolsPct,color:"#D97706"},{icon:"⏰",label:"انضباط",val:lastEntry.disciplinePct,color:"#DC2626"}].map(r=>(
-              <div key={r.label} style={{display:"flex",justifyContent:"space-between",fontSize:13,padding:"7px 0",borderBottom:"1px solid #374151"}}>
-                <span>{r.icon} {r.label}</span>
-                <span style={{fontWeight:700,color:r.color}}>{r.val}%</span>
-              </div>
-            ))}
-          </div>
-          <div style={{display:"flex",gap:10,marginTop:4}}>
-            <button style={{...St.btn,background:"#1D4ED8"}} onClick={resetForm}>تقييم جديد</button>
-            <button style={{...St.btn,background:"#374151"}} onClick={()=>setPage("home")}>الرئيسية</button>
-          </div>
-        </div>
-      </div>);
-    }
-    return(<div style={St.root}>
-      <div style={St.bar}>
-        <button style={St.back} onClick={()=>setPage("home")}>← رجوع</button>
-        <span style={{fontWeight:700,fontSize:15}}>تقييم جديد</span>
-        <span style={{color:"#9CA3AF",fontSize:13}}>{activeSection+1}/{SECTIONS.length}</span>
+    if(saved&&lastEntry){const g=gradeOf(lastEntry.percentage);return(<div style={St.root} className="fade"><div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"32px 20px",gap:10}}><div style={{fontSize:64}}>✅</div><h2 style={{margin:0,fontSize:18,fontWeight:700}}>تم الحفظ في Google Sheets</h2><div style={{color:"#9CA3AF",fontSize:12}}>{lastEntry.workerName} · {lastEntry.evaluator}</div><div style={{fontSize:46,fontWeight:700,color:g.color}}>{lastEntry.percentage}%</div><div style={{...St.pill,background:g.bg,color:g.color,fontSize:14,padding:"6px 20px"}}>{g.label}</div><div style={{background:"#1F2937",borderRadius:11,padding:12,width:"100%",marginTop:3}}>{SECTIONS.filter(s=>lastEntry.sections?.includes(s.id)).map(s=>{const v=lastEntry[s.id+"Pct"];if(v==null)return null;return(<div key={s.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:"1px solid #374151"}}><span>{s.icon} {s.label}</span><span style={{fontWeight:700,color:s.color}}>{v}%</span></div>);})}</div><div style={{display:"flex",gap:9,marginTop:4}}><button style={{...St.btn,background:"#1D4ED8"}} onClick={resetForm}>تقييم جديد</button><button style={{...St.btn,background:"#374151"}} onClick={()=>setPage("home")}>الرئيسية</button></div></div></div>);}
+
+    return(<div style={St.root} className="fade">
+      <Bar title="تقييم جديد" back={()=>setPage("home")}/>
+
+      {/* Step indicator */}
+      <div style={{display:"flex",gap:4,justifyContent:"center",padding:"10px 0 0"}}>
+        {["⚙️",...activeSecs.map(s=>s.icon),"📝"].map((ic,i)=>(
+          <div key={i} style={{width:i===step?24:8,height:8,borderRadius:4,transition:"all .2s",background:i===step?(activeSecs[i-1]?.color||"#1D4ED8"):i<step?"#4B5563":"#1F2937"}}/>
+        ))}
       </div>
-      {activeSection===0&&(<div style={{...St.card,margin:"12px 12px 0"}}>
+
+      {/* Step 0 — setup */}
+      {step===0&&(<div style={{...St.card,margin:"10px 12px 0"}}>
         <label style={St.lbl}>اختر العامل</label>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-          {WORKERS.map(w=>(<button key={w.id} style={{...St.chip,...(worker===w.id?St.chipA:{})}} onClick={()=>setWorker(w.id)}>
-            <div style={{fontWeight:700,fontSize:13}}>{w.nameAr}</div>
-            <div style={{fontSize:11,color:worker===w.id?"#93C5FD":"#9CA3AF",marginTop:2}}>{w.cars.length} سيارات</div>
-          </button>))}
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+          {workers.map(w=>(<button key={w.id} style={{...St.chip,...(worker===w.id?St.chipA:{})}} onClick={()=>setWorker(w.id)}><div style={{fontWeight:700,fontSize:12}}>{w.nameAr}</div><div style={{fontSize:10,color:worker===w.id?"#93C5FD":"#9CA3AF",marginTop:1}}>{w.cars.length} سيارات</div></button>))}
         </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:10}}>
-          {wo.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}
+        {wo&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:12}}>{wo.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}</div>}
+        <label style={St.lbl}>نوع التقييم</label>
+        <div style={{display:"flex",gap:7,marginBottom:14}}>
+          {["weekly","monthly"].map(t=>(<button key={t} style={{flex:1,padding:"9px",background:evalType===t?"#7C3AED":"#374151",border:evalType===t?"2px solid #8B5CF6":"2px solid #4B5563",borderRadius:9,color:evalType===t?"#fff":"#D1D5DB",fontSize:12,cursor:"pointer",fontWeight:600}} onClick={()=>setEvalType(t)}>{t==="weekly"?"📅 أسبوعي":"📆 شهري"}</button>))}
         </div>
-        <label style={{...St.lbl,marginTop:14}}>نوع التقييم</label>
-        <div style={{display:"flex",gap:8}}>
-          {["weekly","monthly"].map(t=>(<button key={t} style={{...St.typeBtn,...(evalType===t?St.typeBtnA:{})}} onClick={()=>setEvalType(t)}>
-            {t==="weekly"?"📅 أسبوعي":"📆 شهري"}
-          </button>))}
+        <label style={St.lbl}>البنود المراد تقييمها</label>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {SECTIONS.map(s=>{const on=selSecs.includes(s.id);return(<button key={s.id} onClick={()=>setSelSecs(p=>on&&p.length>1?p.filter(x=>x!==s.id):[...p.filter(x=>x!==s.id),s.id])} style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",borderRadius:9,border:`2px solid ${on?s.color:"#374151"}`,background:on?"#1F2937":"#111827",cursor:"pointer"}}><span style={{fontSize:19}}>{s.icon}</span><span style={{fontWeight:600,fontSize:12,color:on?s.color:"#6B7280",flex:1}}>{s.label}</span><span style={{fontSize:17}}>{on?"✅":"⬜"}</span></button>);})}</div>
+      </div>)}
+
+      {/* Criteria steps */}
+      {step>0&&step<=activeSecs.length&&curSec&&(<>
+        <div style={{display:"flex",alignItems:"center",gap:9,padding:"10px 14px",margin:"10px 12px 0",background:"#1F2937",borderRadius:11,borderRight:`4px solid ${curSec.color}`}}>
+          <span style={{fontSize:20}}>{curSec.icon}</span>
+          <span style={{fontWeight:700,fontSize:13,color:curSec.color,flex:1}}>{curSec.label}</span>
+          <span style={{fontWeight:700,fontSize:16,color:curSec.color}}>{sPct(scores,curSec.id)}%</span>
+        </div>
+        <div style={{padding:"7px 12px 0",display:"flex",flexDirection:"column",gap:6}}>
+          {curSec.criteria.map((cr,idx)=>{const val=scores[curSec.id]?.[idx]||0;return(<div key={idx} style={{background:"#1F2937",borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:12,color:"#E5E7EB",marginBottom:8,lineHeight:1.6}}>{cr}</div><div style={{display:"flex",gap:6,justifyContent:"center"}}>{[1,2,3,4,5].map(n=>(<button key={n} style={{width:36,height:36,borderRadius:9,fontWeight:700,fontSize:13,cursor:"pointer",transition:"all .12s",background:val===n?SC[n]:"#1F2937",color:val===n?"#fff":"#6B7280",border:val===n?`2px solid ${SC[n]}`:"2px solid #374151",transform:val===n?"scale(1.14)":"scale(1)"}} onClick={()=>setScores(p=>({...p,[curSec.id]:{...p[curSec.id],[idx]:n}}))}>{n}</button>))}</div>{val>0&&<div style={{fontSize:10,fontWeight:600,textAlign:"center",marginTop:5,color:SC[val]}}>{SL[val]}</div>}</div>);})}
+        </div>
+      </>)}
+
+      {/* Notes step */}
+      {step===activeSecs.length+1&&(<div style={{...St.card,margin:"10px 12px 0"}}>
+        <label style={St.lbl}>ملاحظات (اختياري)</label>
+        <textarea style={St.ta} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="اكتب ملاحظات هنا..." rows={3}/>
+        <div style={{marginTop:10,background:"#111827",borderRadius:9,padding:10}}>
+          <div style={{fontSize:12,color:"#9CA3AF",marginBottom:6}}>ملخص التقييم</div>
+          {activeSecs.map(s=>(<div key={s.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"4px 0"}}><span style={{color:"#D1D5DB"}}>{s.icon} {s.label}</span><span style={{fontWeight:700,color:s.color}}>{sPct(scores,s.id)}%</span></div>))}
+          <div style={{borderTop:"1px solid #374151",marginTop:6,paddingTop:6,display:"flex",justifyContent:"space-between",fontWeight:700}}><span>المجموع</span><span style={{color:gradeOf(pctSecs(scores,activeSecs.map(s=>s.id))).color}}>{pctSecs(scores,activeSecs.map(s=>s.id))}%</span></div>
         </div>
       </div>)}
-      <div style={{...St.secHdr,borderColor:sec.color,margin:"12px 12px 0"}}>
-        <span style={{fontSize:22}}>{sec.icon}</span>
-        <span style={{fontWeight:700,fontSize:15,color:sec.color,flex:1}}>{sec.label}</span>
-        <span style={{fontWeight:700,fontSize:18,color:sec.color}}>{sPct(scores,sec.id)}%</span>
-      </div>
-      <div style={{padding:"8px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
-        {sec.criteria.map((criterion,idx)=>{
-          const val=scores[sec.id]?.[idx]||0;
-          return(<div key={idx} style={St.critRow}>
-            <div style={{fontSize:13,color:"#E5E7EB",marginBottom:10,lineHeight:1.6}}>{criterion}</div>
-            <div style={{display:"flex",gap:8,justifyContent:"center"}}>
-              {[1,2,3,4,5].map(n=>(<button key={n} style={{...St.scoreBtn,background:val===n?SC[n]:"#1F2937",color:val===n?"#fff":"#6B7280",border:val===n?`2px solid ${SC[n]}`:"2px solid #374151",transform:val===n?"scale(1.18)":"scale(1)"}} onClick={()=>setScore(sec.id,idx,n)}>{n}</button>))}
-            </div>
-            {val>0&&<div style={{fontSize:11,fontWeight:600,textAlign:"center",marginTop:6,color:SC[val]}}>{SL[val]}</div>}
-          </div>);
-        })}
-      </div>
-      {activeSection===SECTIONS.length-1&&(<div style={{...St.card,margin:"12px 12px 0"}}>
-        <label style={St.lbl}>ملاحظات إضافية (اختياري)</label>
-        <textarea style={St.ta} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="اكتب أي ملاحظات هنا..." rows={3}/>
-      </div>)}
-      {syncError&&<div style={{margin:"10px 12px 0",background:"#FEE2E2",color:"#DC2626",borderRadius:10,padding:"10px 14px",fontSize:13}}>⚠ {syncError}</div>}
-      <div style={{display:"flex",gap:10,padding:"16px 12px 0"}}>
-        {activeSection>0&&<button style={{...St.btn,background:"#374151",flex:1}} onClick={()=>setActiveSection(s=>s-1)}>← السابق</button>}
-        {activeSection<SECTIONS.length-1
-          ?<button style={{...St.btn,background:sec.color,flex:2}} onClick={()=>setActiveSection(s=>s+1)}>التالي →</button>
+
+      {syncErr&&<div style={{margin:"9px 12px 0",background:"#FEE2E2",color:"#DC2626",borderRadius:9,padding:"8px 12px",fontSize:12}}>⚠ {syncErr}</div>}
+
+      <div style={{display:"flex",gap:8,padding:"12px 12px 0"}}>
+        {step>0&&<button style={{...St.btn,background:"#374151",flex:1}} onClick={()=>setStep(s=>s-1)}>← السابق</button>}
+        {step<activeSecs.length+1
+          ?<button style={{...St.btn,background:curSec?.color||"#1D4ED8",flex:2}} onClick={()=>setStep(s=>s+1)}>التالي →</button>
           :<button style={{...St.btn,background:totalFilled&&!syncing?"#16A34A":"#374151",flex:2,opacity:totalFilled&&!syncing?1:0.5}} disabled={!totalFilled||syncing} onClick={handleSave}>{syncing?"⏳ جاري الحفظ...":"💾 حفظ في Google Sheets"}</button>
         }
-      </div>
-      <div style={{display:"flex",gap:6,justifyContent:"center",alignItems:"center",padding:"14px 0"}}>
-        {SECTIONS.map((s,i)=>(<div key={i} style={{height:8,borderRadius:4,transition:"all .2s",background:i===activeSection?s.color:i<activeSection?"#4B5563":"#1F2937",width:i===activeSection?24:8}}/>))}
       </div>
     </div>);
   }
 
+  // ── HISTORY ───────────────────────────────────────────────────────────────
   if(page==="history") return(
-    <div style={St.root}>
-      <div style={St.bar}>
-        <button style={St.back} onClick={()=>setPage("home")}>← رجوع</button>
-        <span style={{fontWeight:700,fontSize:15}}>سجل التقييمات</span>
-        <span style={{color:"#9CA3AF"}}>{evals.length}</span>
-      </div>
-      {loading&&<div style={St.empty}><div style={St.spinner}/>جاري التحميل...</div>}
+    <div style={St.root} className="fade">
+      <Bar title={`السجل (${evals.length})`} back={()=>setPage("home")}/>
+      {loading&&<div style={St.empty}><div style={St.spin}/>جاري التحميل...</div>}
       {!loading&&evals.length===0&&<div style={St.empty}>لا يوجد تقييمات بعد</div>}
-      <div style={{padding:"8px 12px 0",display:"flex",flexDirection:"column",gap:10}}>
-        {evals.map((e,i)=>{
-          const g=gradeOf(e.percentage);
-          return(<div key={i} style={St.card}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:15}}>{e.workerName}</div>
-                <div style={{color:"#9CA3AF",fontSize:12,marginTop:3}}>{e.date} · {e.evalType==="weekly"?"أسبوعي":"شهري"}</div>
-              </div>
-              <div style={{...St.pill,background:g.bg,color:g.color,fontSize:18,padding:"6px 14px"}}>{e.percentage}%</div>
-            </div>
-            {[{label:"🚗 خارجي",val:e.exteriorPct,color:"#2563EB"},{label:"🪑 داخلي",val:e.interiorPct,color:"#16A34A"},{label:"🧰 أدوات",val:e.toolsPct,color:"#D97706"},{label:"⏰ انضباط",val:e.disciplinePct,color:"#DC2626"}].map(r=>(
-              <div key={r.label} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,marginBottom:6}}>
-                <span style={{minWidth:72}}>{r.label}</span>
-                <div style={{flex:1,height:6,background:"#374151",borderRadius:3,overflow:"hidden"}}>
-                  <div style={{height:"100%",borderRadius:3,width:`${r.val||0}%`,background:r.color}}/>
-                </div>
-                <span style={{color:r.color,fontWeight:700,minWidth:36}}>{r.val||0}%</span>
-              </div>
-            ))}
-            {e.notes?<div style={{marginTop:8,fontSize:12,color:"#9CA3AF",background:"#374151",borderRadius:8,padding:"8px 10px"}}>📝 {e.notes}</div>:null}
-          </div>);
-        })}
+      <div style={{padding:"8px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
+        {evals.map((e,i)=>{const g=gradeOf(e.percentage);const secs=[{l:"🚗 خارجي",v:e.exteriorPct,c:"#2563EB"},{l:"🪑 داخلي",v:e.interiorPct,c:"#16A34A"},{l:"🧰 أدوات",v:e.toolsPct,c:"#D97706"},{l:"⏰ انضباط",v:e.disciplinePct,c:"#DC2626"}].filter(s=>s.v!=null);return(<div key={i} style={St.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontWeight:700,fontSize:13}}>{e.workerName}</div><div style={{color:"#9CA3AF",fontSize:10,marginTop:2}}>{e.date} · {e.evalType==="weekly"?"أسبوعي":"شهري"}</div>{e.evaluator&&<div style={{color:"#60A5FA",fontSize:10}}>بواسطة: {e.evaluator}</div>}</div><div style={{...St.pill,background:g.bg,color:g.color,fontSize:16,padding:"5px 12px"}}>{e.percentage}%</div></div>{secs.map(r=>(<div key={r.l} style={{display:"flex",alignItems:"center",gap:6,fontSize:10,marginBottom:4}}><span style={{minWidth:64}}>{r.l}</span><div style={{flex:1,height:5,background:"#374151",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:`${r.v||0}%`,background:r.c}}/></div><span style={{color:r.c,fontWeight:700,minWidth:30}}>{r.v||0}%</span></div>))}{e.notes?<div style={{marginTop:6,fontSize:10,color:"#9CA3AF",background:"#374151",borderRadius:6,padding:"6px 8px"}}>📝 {e.notes}</div>:null}</div>);})}
       </div>
     </div>
   );
 
-  if(page==="report") return(
-    <div style={St.root}>
-      <div style={St.bar}>
-        <button style={St.back} onClick={()=>setPage("home")}>← رجوع</button>
-        <span style={{fontWeight:700,fontSize:15}}>تقرير الأداء</span>
+  // ── REPORT ────────────────────────────────────────────────────────────────
+  if(page==="report"){
+    const ws=workers.map(w=>{const we=evals.filter(e=>e.workerName===w.nameAr);if(!we.length)return{...w,avg:null,count:0};const avg=Math.round(we.reduce((s,e)=>s+e.percentage,0)/we.length);const recent=we.slice(0,3);const older=we.slice(3,6);const rAvg=recent.length?Math.round(recent.reduce((s,e)=>s+e.percentage,0)/recent.length):avg;const oAvg=older.length?Math.round(older.reduce((s,e)=>s+e.percentage,0)/older.length):avg;const secs=[{id:"exterior",icon:"🚗",label:"خارجي",color:"#2563EB",key:"exteriorPct"},{id:"interior",icon:"🪑",label:"داخلي",color:"#16A34A",key:"interiorPct"},{id:"tools",icon:"🧰",label:"أدوات",color:"#D97706",key:"toolsPct"},{id:"discipline",icon:"⏰",label:"انضباط",color:"#DC2626",key:"disciplinePct"}].map(s=>{const vals=we.filter(e=>e[s.key]!=null).map(e=>e[s.key]);return{...s,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):null};}).filter(s=>s.avg!==null);return{...w,avg,count:we.length,trend:rAvg-oAvg,secs,g:gradeOf(avg)};}).filter(w=>w.avg!==null);
+    const ranked=[...ws].sort((a,b)=>b.avg-a.avg);
+    const overallAvg=ws.length?Math.round(ws.reduce((s,w)=>s+w.avg,0)/ws.length):0;
+    const allEx=ws.length>0&&ws.every(w=>w.avg>=90);
+    const allWk=ws.length>0&&ws.every(w=>w.avg<60);
+    const best=ranked[0];const worst=ranked[ranked.length-1];
+
+    return(<div style={St.root} className="fade">
+      <Bar title="تقرير الأداء" back={()=>setPage("home")}/>
+      {ws.length===0&&<div style={St.empty}>لا يوجد تقييمات بعد</div>}
+      {ws.length>0&&(<>
+        {/* Overall */}
+        <div style={{...St.card,margin:"12px 12px 0",background:"linear-gradient(135deg,#1E3A5F,#1D4ED8)"}}>
+          <div style={{textAlign:"center",marginBottom:12}}>
+            <div style={{fontSize:11,color:"#93C5FD",marginBottom:3}}>المعدل العام للفريق</div>
+            <div style={{fontSize:40,fontWeight:700,color:"#fff"}}>{overallAvg}%</div>
+            <div style={{...St.pill,...gradeOf(overallAvg),marginTop:5,fontSize:12}}>{gradeOf(overallAvg).label}</div>
+          </div>
+          <div style={{background:"rgba(0,0,0,0.25)",borderRadius:9,padding:"9px 13px",fontSize:12,lineHeight:1.9}}>
+            {allEx&&<div>🌟 <b>جميع العمال متميزون!</b> — الأكثر تميزاً: <b style={{color:"#34D399"}}>{best?.nameAr}</b> ({best?.avg}%)</div>}
+            {allWk&&<div>⚠️ <b>الأداء العام ضعيف</b> — الأفضل بين الضعاف: <b style={{color:"#FCA5A5"}}>{best?.nameAr}</b> ({best?.avg}%)</div>}
+            {!allEx&&!allWk&&best&&worst&&best.id!==worst.id&&(<><div>🥇 الأفضل: <b style={{color:"#34D399"}}>{best.nameAr}</b> — {best.avg}%</div><div>📉 يحتاج تحسين: <b style={{color:"#FCA5A5"}}>{worst.nameAr}</b> — {worst.avg}%</div></>)}
+            <div>📋 إجمالي التقييمات: <b>{evals.length}</b></div>
+          </div>
+        </div>
+
+        {/* Ranking */}
+        <div style={{...St.card,margin:"9px 12px 0"}}>
+          <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>🏆 ترتيب العمال</div>
+          {ranked.map((w,i)=>(<div key={w.id} style={{display:"flex",alignItems:"center",gap:9,padding:"7px 0",borderBottom:i<ranked.length-1?"1px solid #374151":"none"}}>
+            <div style={{fontSize:17,minWidth:26,textAlign:"center"}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}`}</div>
+            <div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{w.nameAr}</div><div style={{height:5,background:"#374151",borderRadius:3,overflow:"hidden",marginTop:3}}><div style={{height:"100%",borderRadius:3,width:`${w.avg}%`,background:w.g.color}}/></div></div>
+            <div style={{textAlign:"center"}}><div style={{fontWeight:700,fontSize:15,color:w.g.color}}>{w.avg}%</div>{w.trend!==0&&<div style={{fontSize:9,color:w.trend>0?"#34D399":"#FCA5A5"}}>{w.trend>0?"↑":"↓"}{Math.abs(w.trend)}%</div>}</div>
+          </div>))}
+        </div>
+
+        {/* Individual */}
+        {ws.map(w=>(<div key={w.id} style={{...St.card,margin:"9px 12px 0"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+            <div><div style={{fontWeight:700,fontSize:14}}>{w.nameAr}</div><div style={{color:"#9CA3AF",fontSize:11,marginTop:2}}>{w.count} تقييم{w.trend!==0&&<span style={{color:w.trend>0?"#34D399":"#FCA5A5",marginRight:6}}>{w.trend>0?"📈":"📉"}{w.trend>0?"+":""}{w.trend}%</span>}</div></div>
+            <div style={{textAlign:"center"}}><div style={{fontSize:24,fontWeight:700,color:w.g.color}}>{w.avg}%</div><div style={{...St.pill,background:w.g.bg,color:w.g.color,fontSize:11}}>{w.g.label}</div></div>
+          </div>
+          {w.secs.map(s=>(<div key={s.id} style={{display:"flex",alignItems:"center",gap:7,fontSize:11,marginBottom:6}}><span style={{minWidth:72}}>{s.icon} {s.label}</span><div style={{flex:1,height:7,background:"#374151",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:`${s.avg}%`,background:s.color}}/></div><span style={{color:s.color,fontWeight:700,minWidth:34,textAlign:"right"}}>{s.avg}%</span></div>))}
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:7}}>{w.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}</div>
+          {w.secs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:3,marginTop:9,fontSize:11,fontWeight:600}}><span style={{color:"#16A34A"}}>✅ أقوى: {[...w.secs].sort((a,b)=>b.avg-a.avg)[0]?.icon} {[...w.secs].sort((a,b)=>b.avg-a.avg)[0]?.label}</span><span style={{color:"#DC2626"}}>⚠ يحتاج: {[...w.secs].sort((a,b)=>a.avg-b.avg)[0]?.icon} {[...w.secs].sort((a,b)=>a.avg-b.avg)[0]?.label}</span></div>)}
+        </div>))}
+      </>)}
+    </div>);
+  }
+
+  if(page==="settings"){
+    const tab=sTab; const setTab=setSTab;
+    const editId=sEditId; const setEditId=setSEditId;
+    const editName=sEditName; const setEditName=setSEditName;
+    const newCar=sNewCar; const setNewCar=setSNewCar;
+    const carEditId=sCarEditId; const setCarEditId=setSCarEditId;
+    const accounts=sAccounts; const setAccounts=setSAccounts;
+    const newAcc=sNewAcc; const setNewAcc=setSNewAcc;
+    const newWName=sNewWName; const setNewWName=setSNewWName;
+
+    const saveW=(updated)=>{setWorkers(updated);lsSet("cw_workers",updated);};
+    const saveAcc=(updated)=>{setAccounts(updated);lsSet("cw_accounts",updated);};
+
+    return(<div style={St.root} className="fade">
+      <Bar title="الإعدادات" back={()=>setPage("home")}/>
+      <div style={{display:"flex",margin:"10px 12px 0",borderRadius:10,overflow:"hidden",border:"1px solid #374151"}}>
+        {[{id:"workers",l:"👷 العمال"},{id:"accounts",l:"🔑 الحسابات"}].map(t=>(<button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px",border:"none",cursor:"pointer",fontWeight:700,fontSize:12,background:tab===t.id?"#1D4ED8":"#1F2937",color:tab===t.id?"#fff":"#9CA3AF"}}>{t.l}</button>))}
       </div>
-      <div style={{padding:"8px 12px 0",display:"flex",flexDirection:"column",gap:12}}>
-        {WORKERS.map(w=>{
-          const we=evals.filter(e=>e.workerName===w.nameAr);
-          if(we.length===0) return(<div key={w.id} style={St.card}>
-            <div style={{fontWeight:700,fontSize:16}}>{w.nameAr}</div>
-            <div style={{color:"#6B7280",fontSize:13,marginTop:6}}>لا يوجد تقييمات بعد</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>{w.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}</div>
-          </div>);
-          const avg=Math.round(we.reduce((s,e)=>s+e.percentage,0)/we.length);
-          const g=gradeOf(avg);
-          const secs=[{icon:"🚗",label:"خارجي",key:"exteriorPct",color:"#2563EB"},{icon:"🪑",label:"داخلي",key:"interiorPct",color:"#16A34A"},{icon:"🧰",label:"أدوات",key:"toolsPct",color:"#D97706"},{icon:"⏰",label:"انضباط",key:"disciplinePct",color:"#DC2626"}];
-          const sa=secs.map(s=>({...s,avg:Math.round(we.reduce((sum,e)=>sum+(e[s.key]||0),0)/we.length)}));
-          const best=[...sa].sort((a,b)=>b.avg-a.avg)[0];
-          const worst=[...sa].sort((a,b)=>a.avg-b.avg)[0];
-          return(<div key={w.id} style={St.card}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-              <div>
-                <div style={{fontWeight:700,fontSize:16}}>{w.nameAr}</div>
-                <div style={{color:"#9CA3AF",fontSize:12,marginTop:3}}>{we.length} تقييم</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:30,fontWeight:700,color:g.color}}>{avg}%</div>
-                <div style={{...St.pill,background:g.bg,color:g.color}}>{g.label}</div>
-              </div>
+
+      {tab==="workers"&&(<div style={{padding:"9px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
+        {workers.map(w=>(<div key={w.id} style={St.card}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+            {editId===w.id?<input style={{...St.inp,flex:1,marginLeft:7,fontSize:13}} value={editName} onChange={e=>setEditName(e.target.value)}/>:<div style={{fontWeight:700,fontSize:13}}>{w.nameAr}</div>}
+            <div style={{display:"flex",gap:5}}>
+              {editId===w.id?<><button style={{...St.btn,background:"#16A34A",padding:"5px 10px",fontSize:11}} onClick={()=>{saveW(workers.map(x=>x.id===w.id?{...x,nameAr:editName}:x));setEditId(null);}}>حفظ</button><button style={{...St.btn,background:"#374151",padding:"5px 10px",fontSize:11}} onClick={()=>setEditId(null)}>إلغاء</button></>:<><button style={{...St.btn,background:"#1D4ED8",padding:"5px 10px",fontSize:11}} onClick={()=>{setEditId(w.id);setEditName(w.nameAr);}}>تعديل</button><button style={{...St.btn,background:"#DC2626",padding:"5px 10px",fontSize:11}} onClick={()=>saveW(workers.filter(x=>x.id!==w.id))}>حذف</button></>}
             </div>
-            {sa.map(s=>(<div key={s.key} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,marginBottom:8}}>
-              <span style={{minWidth:80}}>{s.icon} {s.label}</span>
-              <div style={{flex:1,height:8,background:"#374151",borderRadius:4,overflow:"hidden"}}>
-                <div style={{height:"100%",borderRadius:4,width:`${s.avg}%`,background:s.color}}/>
-              </div>
-              <span style={{color:s.color,fontWeight:700,minWidth:40,textAlign:"right"}}>{s.avg}%</span>
-            </div>))}
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>{w.cars.map(c=><span key={c} style={St.tag}>{c}</span>)}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:12,fontSize:12,fontWeight:600}}>
-              <span style={{color:"#16A34A"}}>✅ أقوى نقطة: {best.icon} {best.label} ({best.avg}%)</span>
-              <span style={{color:"#DC2626"}}>⚠ تحتاج تحسين: {worst.icon} {worst.label} ({worst.avg}%)</span>
-            </div>
-          </div>);
-        })}
-      </div>
-    </div>
-  );
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:7}}>
+            {w.cars.map(c=>(<span key={c} style={{...St.tag,cursor:"pointer"}} onClick={()=>saveW(workers.map(x=>x.id===w.id?{...x,cars:x.cars.filter(car=>car!==c)}:x))}>{c} ✕</span>))}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <input style={{...St.inp,flex:1,fontSize:12}} placeholder="أضف سيارة..." value={carEditId===w.id?newCar:""} onChange={e=>setNewCar(e.target.value)} onFocus={()=>setCarEditId(w.id)} onKeyDown={e=>{if(e.key==="Enter"&&newCar.trim()){saveW(workers.map(x=>x.id===w.id?{...x,cars:[...x.cars,newCar.trim()]}:x));setNewCar("");}}}/>
+            <button style={{...St.btn,background:"#16A34A",padding:"7px 12px",fontSize:12}} onClick={()=>{if(newCar.trim()&&carEditId===w.id){saveW(workers.map(x=>x.id===w.id?{...x,cars:[...x.cars,newCar.trim()]}:x));setNewCar("");}}}>+</button>
+          </div>
+        </div>))}
+        <div style={{...St.card,border:"2px dashed #374151"}}>
+          <div style={{fontWeight:700,fontSize:12,marginBottom:8,color:"#9CA3AF"}}>+ عامل جديد</div>
+          <input style={{...St.inp,marginBottom:8,fontSize:12}} placeholder="اسم العامل" value={newWName} onChange={e=>setNewWName(e.target.value)}/>
+          <button style={{...St.btn,background:"#1D4ED8",width:"100%"}} onClick={()=>{if(!newWName.trim())return;saveW([...workers,{id:"w"+Date.now(),nameAr:newWName.trim(),cars:[]}]);setNewWName("");}}>إضافة عامل</button>
+        </div>
+      </div>)}
+
+      {tab==="accounts"&&(<div style={{padding:"9px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
+        {accounts.map((acc,i)=>(<div key={i} style={St.card}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}><div><div style={{fontWeight:700,fontSize:13}}>{acc.displayName}</div><div style={{color:"#9CA3AF",fontSize:10,marginTop:2}}>@{acc.username} · {acc.role==="admin"?"👑 مدير":"👤 مقيم"}</div></div>{acc.username!=="admin"&&<button style={{...St.btn,background:"#DC2626",padding:"5px 10px",fontSize:11}} onClick={()=>saveAcc(accounts.filter((_,j)=>j!==i))}>حذف</button>}</div></div>))}
+        <div style={{...St.card,border:"2px dashed #374151"}}>
+          <div style={{fontWeight:700,fontSize:12,marginBottom:8,color:"#9CA3AF"}}>+ حساب جديد</div>
+          <input style={{...St.inp,marginBottom:7,fontSize:12}} placeholder="الاسم الظاهر" value={newAcc.displayName} onChange={e=>setNewAcc(p=>({...p,displayName:e.target.value}))}/>
+          <input style={{...St.inp,marginBottom:7,fontSize:12}} placeholder="اسم المستخدم (إنجليزي)" value={newAcc.username} onChange={e=>setNewAcc(p=>({...p,username:e.target.value}))}/>
+          <input style={{...St.inp,marginBottom:10,fontSize:12}} placeholder="كلمة المرور" value={newAcc.password} onChange={e=>setNewAcc(p=>({...p,password:e.target.value}))}/>
+          <div style={{display:"flex",gap:7,marginBottom:10}}>
+            {["evaluator","admin"].map(r=>(<button key={r} style={{flex:1,padding:"8px",background:newAcc.role===r?"#7C3AED":"#374151",border:newAcc.role===r?"2px solid #8B5CF6":"2px solid #4B5563",borderRadius:8,color:newAcc.role===r?"#fff":"#D1D5DB",fontSize:12,cursor:"pointer",fontWeight:600}} onClick={()=>setNewAcc(p=>({...p,role:r}))}>{r==="admin"?"👑 مدير":"👤 مقيم"}</button>))}
+          </div>
+          <button style={{...St.btn,background:"#1D4ED8",width:"100%"}} onClick={()=>{if(!newAcc.username.trim()||!newAcc.password.trim()||!newAcc.displayName.trim())return;saveAcc([...accounts,{...newAcc}]);setNewAcc({username:"",password:"",displayName:"",role:"evaluator"});}}>إضافة حساب</button>
+        </div>
+      </div>)}
+    </div>);
+  }
+
+  return null;
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
