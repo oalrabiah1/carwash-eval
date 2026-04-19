@@ -272,7 +272,20 @@ function App(){
       {loading&&<div style={St.empty}><div style={St.spin}/>جاري التحميل...</div>}
       {!loading&&evals.length===0&&<div style={St.empty}>لا يوجد تقييمات بعد</div>}
       <div style={{padding:"8px 12px 0",display:"flex",flexDirection:"column",gap:8}}>
-        {evals.map((e,i)=>{const g=gradeOf(e.percentage);const secs=[{l:"🚗 خارجي",v:e.exteriorPct,c:"#2563EB"},{l:"🪑 داخلي",v:e.interiorPct,c:"#16A34A"},{l:"🧰 أدوات",v:e.toolsPct,c:"#D97706"},{l:"⏰ انضباط",v:e.disciplinePct,c:"#DC2626"}].filter(s=>s.v!=null);return(<div key={i} style={St.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontWeight:700,fontSize:13}}>{e.workerName}</div><div style={{color:"#9CA3AF",fontSize:10,marginTop:2}}>{e.date} · {e.evalType==="weekly"?"أسبوعي":"شهري"}</div>{e.evaluator&&<div style={{color:"#60A5FA",fontSize:10}}>بواسطة: {e.evaluator}</div>}</div><div style={{...St.pill,background:g.bg,color:g.color,fontSize:16,padding:"5px 12px"}}>{e.percentage}%</div></div>{secs.map(r=>(<div key={r.l} style={{display:"flex",alignItems:"center",gap:6,fontSize:10,marginBottom:4}}><span style={{minWidth:64}}>{r.l}</span><div style={{flex:1,height:5,background:"#374151",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:`${r.v||0}%`,background:r.c}}/></div><span style={{color:r.c,fontWeight:700,minWidth:30}}>{r.v||0}%</span></div>))}{e.notes?<div style={{marginTop:6,fontSize:10,color:"#9CA3AF",background:"#374151",borderRadius:6,padding:"6px 8px"}}>📝 {e.notes}</div>:null}</div>);})}
+        {evals.map((e,i)=>{const g=gradeOf(e.percentage);const secs=[{l:"🚗 خارجي",v:e.exteriorPct,c:"#2563EB"},{l:"🪑 داخلي",v:e.interiorPct,c:"#16A34A"},{l:"🧰 أدوات",v:e.toolsPct,c:"#D97706"},{l:"⏰ انضباط",v:e.disciplinePct,c:"#DC2626"}].filter(s=>s.v!=null);return(<div key={i} style={St.card}><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div><div style={{fontWeight:700,fontSize:13}}>{e.workerName}</div><div style={{color:"#9CA3AF",fontSize:10,marginTop:2}}>{e.date} · {e.evalType==="weekly"?"أسبوعي":"شهري"}</div>{e.evaluator&&<div style={{color:"#60A5FA",fontSize:10}}>بواسطة: {e.evaluator}</div>}</div><div style={{...St.pill,background:g.bg,color:g.color,fontSize:16,padding:"5px 12px"}}>{e.percentage}%</div></div>{secs.map(r=>(<div key={r.l} style={{display:"flex",alignItems:"center",gap:6,fontSize:10,marginBottom:4}}><span style={{minWidth:64}}>{r.l}</span><div style={{flex:1,height:5,background:"#374151",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,width:`${r.v||0}%`,background:r.c}}/></div><span style={{color:r.c,fontWeight:700,minWidth:30}}>{r.v||0}%</span></div>))}{e.notes?<div style={{marginTop:6,fontSize:10,color:"#9CA3AF",background:"#374151",borderRadius:6,padding:"6px 8px"}}>📝 {e.notes}</div>:null}
+            {(user.role==="admin"||e.evaluator===user.displayName)&&(
+              <button style={{...St.btn,background:"#1D4ED8",padding:"5px 12px",fontSize:11,marginTop:8,width:"100%"}} onClick={()=>{
+                setScores(e.scores||emptyScores());
+                setNotes(e.notes||"");
+                setWorker(workers.find(w=>w.nameAr===e.workerName)?.id||workers[0]?.id||"");
+                setEvalType(e.evalType||"weekly");
+                setSelSecs(e.sections?e.sections.split(","):SECTIONS.map(s=>s.id));
+                setSaved(false);setStep(1);
+                setEditingId(e.id);
+                setPage("form");
+              }}>✏️ تعديل هذا التقييم</button>
+            )}
+          </div>);})}
       </div>
     </div>
   );
