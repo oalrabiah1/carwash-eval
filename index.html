@@ -43,9 +43,29 @@ const SECTIONS=[
 const SL={1:"ضعيف جداً",2:"ضعيف",3:"مقبول",4:"جيد",5:"ممتاز"};
 const SC={1:"#DC2626",2:"#EA580C",3:"#CA8A04",4:"#2563EB",5:"#16A34A"};
 
-const calcSec=(sc,id)=>SECTIONS.find(s=>s.id===id).criteria.reduce((s,_,i)=>s+(sc[id]?.[i]||0),0);
-const pctSecs=(sc,ids)=>{const mx=ids.reduce((s,id)=>s+SECTIONS.find(x=>x.id===id).criteria.length*5,0);return mx?Math.round(ids.reduce((s,id)=>s+calcSec(sc,id),0)/mx*100):0;};
-const sPct=(sc,id)=>{const sec=SECTIONS.find(s=>s.id===id);const mx=sec.criteria.length*5;return mx?Math.round(calcSec(sc,id)/mx*100):0;};
+// -1 = neutral/skip, 0 = not answered, 1-5 = scored
+const calcSec=(sc,id)=>{
+  const sec=SECTIONS.find(s=>s.id===id);
+  return sec.criteria.reduce((s,_,i)=>{const v=sc[id]?.[i]||0;return v===-1?s:s+v;},0);
+};
+const countAnswered=(sc,id)=>{
+  const sec=SECTIONS.find(s=>s.id===id);
+  return sec.criteria.filter((_,i)=>(sc[id]?.[i]||0)!==-1&&(sc[id]?.[i]||0)!==0).length;
+};
+const pctSecs=(sc,ids)=>{
+  let total=0,mx=0;
+  ids.forEach(id=>{
+    const sec=SECTIONS.find(s=>s.id===id);
+    sec.criteria.forEach((_,i)=>{const v=sc[id]?.[i]||0;if(v!==-1&&v!==0){total+=v;mx+=5;}});
+  });
+  return mx?Math.round(total/mx*100):0;
+};
+const sPct=(sc,id)=>{
+  const sec=SECTIONS.find(s=>s.id===id);
+  let total=0,mx=0;
+  sec.criteria.forEach((_,i)=>{const v=sc[id]?.[i]||0;if(v!==-1&&v!==0){total+=v;mx+=5;}});
+  return mx?Math.round(total/mx*100):0;
+};
 const gradeOf=(p)=>p>=90?{label:"ممتاز",color:"#16A34A",bg:"#DCFCE7"}:p>=75?{label:"جيد",color:"#2563EB",bg:"#DBEAFE"}:p>=60?{label:"مقبول",color:"#CA8A04",bg:"#FEF9C3"}:p>=45?{label:"ضعيف",color:"#EA580C",bg:"#FFEDD5"}:{label:"ضعيف جداً",color:"#DC2626",bg:"#FEE2E2"};
 const emptyScores=()=>{const s={};SECTIONS.forEach(sec=>{s[sec.id]={};sec.criteria.forEach((_,i)=>{s[sec.id][i]=0;});});return s;};
 
@@ -120,21 +140,32 @@ function App(){
   const[sAccounts,setSAccounts]=useState(lsGet("cw_accounts",DEFAULT_ACCOUNTS));
   const[sNewAcc,setSNewAcc]=useState({username:"",password:"",displayName:"",role:"evaluator"});
   const[sNewWName,setSNewWName]=useState("");
+  const[editingId,setEditingId]=useState(null);
 
   useEffect(()=>{if(!user)return;getEvals().then(r=>{if(r.success)setEvals((r.data||[]).map(row=>({id:row.ID,date:row.Date,workerName:row.Worker,evalType:row.Type,evaluator:row.Evaluator||"",percentage:Number(row["Total%"])||0,exteriorPct:row["Exterior%"]!==""?Number(row["Exterior%"]):null,interiorPct:row["Interior%"]!==""?Number(row["Interior%"]):null,toolsPct:row["Tools%"]!==""?Number(row["Tools%"]):null,disciplinePct:row["Discipline%"]!==""?Number(row["Discipline%"]):null,grade:row.Grade,notes:row.Notes,sections:row.Sections||""})).reverse());setLoading(false);}).catch(()=>setLoading(false));},[user]);
   useEffect(()=>{lsSet("cw_workers",workers);},[workers]);
 
-  const resetForm=()=>{setScores(emptyScores());setNotes("");setSaved(false);setStep(0);setWorker(workers[0]?.id||"");setSyncErr("");setSelSecs(SECTIONS.map(s=>s.id));};
+  const resetForm=()=>{setScores(emptyScores());setNotes("");setSaved(false);setStep(0);setWorker(workers[0]?.id||"");setSyncErr("");setSelSecs(SECTIONS.map(s=>s.id));setEditingId(null);};
   const activeSecs=SECTIONS.filter(s=>selSecs.includes(s.id));
   const curSec=activeSecs[step-1];
-  const totalFilled=activeSecs.every(sec=>sec.criteria.every((_,i)=>(scores[sec.id]?.[i]||0)>0));
+  const totalFilled=activeSecs.every(sec=>sec.criteria.every((_,i)=>{const v=scores[sec.id]?.[i]||0;return v>0||v===-1;}));
   const wo=workers.find(w=>w.id===worker)||workers[0];
 
   const handleSave=async()=>{
     setSyncing(true);setSyncErr("");
     const p=pctSecs(scores,activeSecs.map(s=>s.id));const g=gradeOf(p);
     const entry={id:Date.now(),date:new Date().toLocaleDateString("ar-SA"),workerName:wo.nameAr,evalType,evaluator:user.displayName,exteriorPct:selSecs.includes("exterior")?sPct(scores,"exterior"):null,interiorPct:selSecs.includes("interior")?sPct(scores,"interior"):null,toolsPct:selSecs.includes("tools")?sPct(scores,"tools"):null,disciplinePct:selSecs.includes("discipline")?sPct(scores,"discipline"):null,percentage:p,grade:g.label,notes,scores,sections:activeSecs.map(s=>s.id).join(",")};
-    try{const r=await post(entry);if(r.success){setEvals(prev=>[entry,...prev]);setLastEntry(entry);setSaved(true);}else setSyncErr("خطأ في الحفظ");}catch{setSyncErr("تأكد من الإنترنت");}
+    try{
+      const r=await post(entry);
+      if(r.success){
+        if(editingId){
+          setEvals(prev=>prev.map(e=>e.id===editingId?{...entry,id:editingId}:e));
+        } else {
+          setEvals(prev=>[entry,...prev]);
+        }
+        setLastEntry(entry);setSaved(true);setEditingId(null);
+      }else setSyncErr("خطأ في الحفظ");
+    }catch{setSyncErr("تأكد من الإنترنت");}
     setSyncing(false);
   };
 
@@ -171,7 +202,7 @@ function App(){
     if(saved&&lastEntry){const g=gradeOf(lastEntry.percentage);return(<div style={St.root} className="fade"><div style={{display:"flex",flexDirection:"column",alignItems:"center",padding:"32px 20px",gap:10}}><div style={{fontSize:64}}>✅</div><h2 style={{margin:0,fontSize:18,fontWeight:700}}>تم الحفظ في Google Sheets</h2><div style={{color:"#9CA3AF",fontSize:12}}>{lastEntry.workerName} · {lastEntry.evaluator}</div><div style={{fontSize:46,fontWeight:700,color:g.color}}>{lastEntry.percentage}%</div><div style={{...St.pill,background:g.bg,color:g.color,fontSize:14,padding:"6px 20px"}}>{g.label}</div><div style={{background:"#1F2937",borderRadius:11,padding:12,width:"100%",marginTop:3}}>{SECTIONS.filter(s=>lastEntry.sections?.includes(s.id)).map(s=>{const v=lastEntry[s.id+"Pct"];if(v==null)return null;return(<div key={s.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"5px 0",borderBottom:"1px solid #374151"}}><span>{s.icon} {s.label}</span><span style={{fontWeight:700,color:s.color}}>{v}%</span></div>);})}</div><div style={{display:"flex",gap:9,marginTop:4}}><button style={{...St.btn,background:"#1D4ED8"}} onClick={resetForm}>تقييم جديد</button><button style={{...St.btn,background:"#374151"}} onClick={()=>setPage("home")}>الرئيسية</button></div></div></div>);}
 
     return(<div style={St.root} className="fade">
-      <Bar title="تقييم جديد" back={()=>setPage("home")}/>
+      <Bar title={editingId?"✏️ تعديل تقييم":"تقييم جديد"} back={()=>{setEditingId(null);setPage(editingId?"history":"home");}}/>
 
       {/* Step indicator */}
       <div style={{display:"flex",gap:4,justifyContent:"center",padding:"10px 0 0"}}>
@@ -204,7 +235,10 @@ function App(){
           <span style={{fontWeight:700,fontSize:16,color:curSec.color}}>{sPct(scores,curSec.id)}%</span>
         </div>
         <div style={{padding:"7px 12px 0",display:"flex",flexDirection:"column",gap:6}}>
-          {curSec.criteria.map((cr,idx)=>{const val=scores[curSec.id]?.[idx]||0;return(<div key={idx} style={{background:"#1F2937",borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:12,color:"#E5E7EB",marginBottom:8,lineHeight:1.6}}>{cr}</div><div style={{display:"flex",gap:6,justifyContent:"center"}}>{[1,2,3,4,5].map(n=>(<button key={n} style={{width:36,height:36,borderRadius:9,fontWeight:700,fontSize:13,cursor:"pointer",transition:"all .12s",background:val===n?SC[n]:"#1F2937",color:val===n?"#fff":"#6B7280",border:val===n?`2px solid ${SC[n]}`:"2px solid #374151",transform:val===n?"scale(1.14)":"scale(1)"}} onClick={()=>setScores(p=>({...p,[curSec.id]:{...p[curSec.id],[idx]:n}}))}>{n}</button>))}</div>{val>0&&<div style={{fontSize:10,fontWeight:600,textAlign:"center",marginTop:5,color:SC[val]}}>{SL[val]}</div>}</div>);})}
+          {curSec.criteria.map((cr,idx)=>{const val=scores[curSec.id]?.[idx]||0;return(<div key={idx} style={{background:"#1F2937",borderRadius:9,padding:"10px 12px"}}><div style={{fontSize:12,color:"#E5E7EB",marginBottom:8,lineHeight:1.6}}>{cr}</div><div style={{display:"flex",gap:6,justifyContent:"center"}}>{[1,2,3,4,5].map(n=>(<button key={n} style={{width:36,height:36,borderRadius:9,fontWeight:700,fontSize:13,cursor:"pointer",transition:"all .12s",background:val===n?SC[n]:"#1F2937",color:val===n?"#fff":"#6B7280",border:val===n?`2px solid ${SC[n]}`:"2px solid #374151",transform:val===n?"scale(1.14)":"scale(1)"}} onClick={()=>setScores(p=>({...p,[curSec.id]:{...p[curSec.id],[idx]:n}}))}>{n}</button>))}
+                <button style={{width:36,height:36,borderRadius:9,fontWeight:600,fontSize:11,cursor:"pointer",background:val===-1?"#4B5563":"#1F2937",color:val===-1?"#E5E7EB":"#6B7280",border:val===-1?"2px solid #9CA3AF":"2px solid #374151",transition:"all .12s"}} onClick={()=>setScores(p=>({...p,[curSec.id]:{...p[curSec.id],[idx]:val===-1?0:-1}}))}>لا أدري</button>
+              </div>{val>0&&<div style={{fontSize:10,fontWeight:600,textAlign:"center",marginTop:5,color:SC[val]}}>{SL[val]}</div>}
+              {val===-1&&<div style={{fontSize:10,fontWeight:600,textAlign:"center",marginTop:5,color:"#6B7280"}}>لن يُحسب في النتيجة</div>}</div>);})}
         </div>
       </>)}
 
